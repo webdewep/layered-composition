@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layered Composition</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --bg: #0e0e0e; --text: #f0f0f0; --muted: #888; }
+    html { scroll-behavior: auto; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg); color: var(--text); overflow-x: hidden;
+    }
+    .window-container {
+      width: min(100%, 1600px);
+      margin-inline: auto;
+      padding-inline: clamp(1.25rem, 5vw, 5rem);
+    }
+    .spacer {
+      min-height: 60vh;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 1rem; letter-spacing: .06em;
+      border-bottom: 1px solid #1e1e1e;
+    }
+    .composition {
+      position: relative;
+      container-type: inline-size;
+      padding-block: clamp(4rem, 10vh, 9rem);
+      overflow: visible;
+    }
+    .bg-vector {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none; z-index: 0; overflow: hidden;
+    }
+    .bg-vector svg {
+      width: clamp(320px, 70cqw, 960px); height: auto;
+      opacity: .055;
+      transform: translateX(8%) rotate(-4deg);
+      user-select: none;
+    }
+    .composition-inner {
+      position: relative; z-index: 1;
+      display: grid; grid-template-columns: repeat(12, 1fr); gap: 0;
+      align-items: start;
+    }
+    .comp-heading {
+      grid-column: 1 / -1; grid-row: 1;
+      position: relative; z-index: 3;
+      font-size: clamp(3.5rem, 9cqw, 10rem);
+      font-weight: 800; line-height: .9; letter-spacing: -.03em;
+      text-transform: uppercase; color: var(--text);
+      mix-blend-mode: difference;
+      pointer-events: none;
+      padding-bottom: clamp(1.5rem, 3vh, 3rem);
+      transition: opacity .35s ease;
+    }
+    .comp-heading.dimmed { opacity: .18; }
+    .photos-cluster {
+      grid-column: 1 / -1; grid-row: 2;
+      position: relative;
+      height: clamp(340px, 55cqw, 700px);
+    }
+    .photo-card {
+      position: absolute; overflow: hidden; border-radius: 6px;
+      z-index: 2; will-change: transform, box-shadow;
+      transition:
+        transform  .40s cubic-bezier(.22,1,.36,1),
+        box-shadow .40s cubic-bezier(.22,1,.36,1),
+        filter     .40s ease,
+        rotate     .40s cubic-bezier(.22,1,.36,1);
+      cursor: pointer;
+    }
+    .photo-card img {
+      display: block; width: 100%; height: 100%;
+      object-fit: cover; pointer-events: none; border-radius: inherit;
+    }
+    .photo-card:nth-child(1) {
+      left: 0%; top: 5%;
+      width: clamp(180px,34cqw,430px); height: clamp(220px,44cqw,560px);
+      rotate: -3deg; z-index: 2;
+    }
+    .photo-card:nth-child(2) {
+      left: clamp(120px,22cqw,290px); top: 0%;
+      width: clamp(160px,28cqw,360px); height: clamp(200px,38cqw,480px);
+      rotate: 2deg; z-index: 3;
+    }
+    .photo-card:nth-child(3) {
+      left: clamp(230px,38cqw,480px); top: 8%;
+      width: clamp(170px,30cqw,380px); height: clamp(230px,46cqw,580px);
+      rotate: -1.5deg; z-index: 2;
+    }
+    .photo-card:nth-child(4) {
+      left: clamp(350px,56cqw,720px); top: 3%;
+      width: clamp(130px,22cqw,280px); height: clamp(170px,32cqw,400px);
+      rotate: 3.5deg; z-index: 3;
+    }
+    .photos-cluster.cluster-hovered .photo-card {
+      filter: brightness(.38) saturate(.5);
+      transform: scale(.97);
+    }
+    .photos-cluster.cluster-hovered .photo-card.card-active {
+      filter: brightness(1) saturate(1);
+      transform: scale(1.055) !important;
+      rotate: 0deg !important;
+      box-shadow: 0 16px 40px rgba(0,0,0,.65), 0 4px 12px rgba(0,0,0,.4);
+      z-index: 10;
+    }
+    .comp-caption {
+      grid-column: 1 / -1; grid-row: 3;
+      display: flex; justify-content: space-between; align-items: flex-end;
+      padding-top: clamp(1.5rem, 4vh, 3rem);
+      position: relative; z-index: 3;
+      transition: opacity .35s ease;
+    }
+    .comp-caption.dimmed { opacity: .18; }
+    .caption-left {
+      font-size: clamp(.75rem,1.2cqw,.95rem); color: var(--muted);
+      letter-spacing: .1em; text-transform: uppercase;
+      max-width: 36ch; line-height: 1.6;
+    }
+    .caption-right {
+      font-size: clamp(.7rem,1.1cqw,.85rem);
+      color: var(--muted); letter-spacing: .06em; text-align: right;
+    }
+    @container (max-width: 1024px) {
+      .comp-heading {
+        font-size: clamp(2.8rem,7cqw,5rem);
+        mix-blend-mode: normal;
+        padding-bottom: clamp(1rem,2.5vh,2rem);
+      }
+      .photos-cluster {
+        height: auto;
+        display: grid; grid-template-columns: 1fr 1fr;
+        gap: clamp(.5rem,1.5cqw,1.25rem);
+      }
+      .photo-card {
+        position: relative;
+        left: unset !important; top: unset !important;
+        width: 100% !important; height: clamp(160px,30cqw,320px) !important;
+        rotate: 0deg !important;
+      }
+      .photo-card:nth-child(1) {
+        grid-column: 1 / -1;
+        height: clamp(200px,36cqw,380px) !important;
+      }
+      .photos-cluster.cluster-hovered .photo-card.card-active {
+        transform: scale(1.04) !important; rotate: 0deg !important;
+      }
+    }
+    @container (max-width: 600px) {
+      .comp-heading {
+        font-size: clamp(2.2rem,12cqw,3.8rem);
+        padding-bottom: 1rem;
+      }
+      .photos-cluster {
+        display: flex; flex-direction: row;
+        overflow-x: auto; scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch; scrollbar-width: none;
+        gap: .75rem; padding-bottom: .5rem;
+        margin-inline: calc(-1 * clamp(1.25rem,5vw,5rem));
+        padding-inline: clamp(1.25rem,5vw,5rem);
+      }
+      .photos-cluster::-webkit-scrollbar { display: none; }
+      .photo-card {
+        position: relative;
+        left: unset !important; top: unset !important;
+        flex: 0 0 75vw; width: 75vw !important; height: 52vw !important;
+        scroll-snap-align: start; rotate: 0deg !important;
+      }
+      .photo-card:nth-child(1) { height: 52vw !important; }
+      .photo-card:active {
+        transform: scale(1.03) !important;
+        filter: brightness(1) !important;
+        box-shadow: 0 12px 32px rgba(0,0,0,.5) !important;
+        z-index: 10 !important;
+      }
+      .comp-caption { flex-direction: column; gap: .5rem; align-items: flex-start; }
+      .caption-right { text-align: left; }
+    }
+    .below { margin-top: clamp(3rem,6vh,6rem); }
+  </style>
+</head>
+<body>
+
+<div class="spacer">Scroll down ↓</div>
+
+<div class="window-container">
+  <section class="composition" id="composition">
+    <div class="bg-vector" aria-hidden="true">
+      <svg viewBox="0 0 800 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10"  y="80"  width="260" height="260" rx="8" stroke="white" stroke-width="28"/>
+        <rect x="120" y="10"  width="260" height="260" rx="8" stroke="white" stroke-width="18"/>
+        <circle cx="560" cy="200" r="170" stroke="white" stroke-width="28"/>
+        <circle cx="560" cy="200" r="90"  stroke="white" stroke-width="14"/>
+        <line x1="420" y1="200" x2="780" y2="200" stroke="white" stroke-width="14"/>
+        <line x1="560" y1="30"  x2="560" y2="370" stroke="white" stroke-width="14"/>
+      </svg>
+    </div>
+    <div class="composition-inner">
+      <h1 class="comp-heading" id="compHeading">Layers&amp;<br>Depth</h1>
+      <div class="photos-cluster" id="photosCluster">
+        <div class="photo-card" tabindex="0" role="button" aria-label="Фото 1">
+          <svg viewBox="0 0 600 800" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+            <rect width="600" height="800" fill="#1a1a2e"/>
+            <polygon points="0,800 180,320 360,800" fill="#16213e"/>
+            <polygon points="120,800 300,200 480,800" fill="#0f3460"/>
+            <polygon points="240,800 420,280 600,800" fill="#1a1a2e"/>
+            <polygon points="300,800 450,350 600,800" fill="#0d0d1a"/>
+            <circle cx="480" cy="100" r="55" fill="#e2b96f" opacity=".9"/>
+            <circle cx="480" cy="100" r="70" fill="none" stroke="#e2b96f" stroke-width="2" opacity=".3"/>
+            <rect x="0" y="0" width="600" height="800" fill="url(#g1)"/>
+            <defs>
+              <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#0d0d1a" stop-opacity=".0"/>
+                <stop offset="100%" stop-color="#0d0d1a" stop-opacity=".6"/>
+              </linearGradient>
+            </defs>
+            <text x="30" y="770" font-family="system-ui" font-size="13" fill="#ffffff" opacity=".4" letter-spacing="3">01 / LANDSCAPE</text>
+          </svg>
+        </div>
+        <div class="photo-card" tabindex="0" role="button" aria-label="Фото 2">
+          <svg viewBox="0 0 500 700" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+            <rect width="500" height="700" fill="#0a0a0a"/>
+            <circle cx="250" cy="280" r="200" fill="none" stroke="#c9a96e" stroke-width="1" opacity=".25"/>
+            <circle cx="250" cy="280" r="150" fill="none" stroke="#c9a96e" stroke-width="1" opacity=".35"/>
+            <circle cx="250" cy="280" r="100" fill="none" stroke="#c9a96e" stroke-width="1" opacity=".5"/>
+            <circle cx="250" cy="280" r="55"  fill="#c9a96e" opacity=".15"/>
+            <circle cx="250" cy="280" r="28"  fill="#c9a96e" opacity=".6"/>
+            <line x1="50"  y1="280" x2="450" y2="280" stroke="#c9a96e" stroke-width="1" opacity=".15"/>
+            <line x1="250" y1="80"  x2="250" y2="480" stroke="#c9a96e" stroke-width="1" opacity=".15"/>
+            <line x1="108" y1="138" x2="392" y2="422" stroke="#c9a96e" stroke-width="1" opacity=".1"/>
+            <line x1="392" y1="138" x2="108" y2="422" stroke="#c9a96e" stroke-width="1" opacity=".1"/>
+            <circle cx="80"  cy="120" r="3" fill="#c9a96e" opacity=".7"/>
+            <circle cx="420" cy="80"  r="2" fill="#c9a96e" opacity=".5"/>
+            <circle cx="350" cy="600" r="4" fill="#c9a96e" opacity=".4"/>
+            <circle cx="60"  cy="580" r="2" fill="#c9a96e" opacity=".6"/>
+            <circle cx="460" cy="500" r="3" fill="#c9a96e" opacity=".5"/>
+            <defs>
+              <radialGradient id="g2" cx="50%" cy="40%" r="60%">
+                <stop offset="0%" stop-color="#1a1000" stop-opacity="0"/>
+                <stop offset="100%" stop-color="#0a0a0a" stop-opacity="1"/>
+              </radialGradient>
+            </defs>
+            <rect width="500" height="700" fill="url(#g2)"/>
+            <text x="30" y="675" font-family="system-ui" font-size="13" fill="#ffffff" opacity=".4" letter-spacing="3">02 / COSMOS</text>
+          </svg>
+        </div>
+        <div class="photo-card" tabindex="0" role="button" aria-label="Фото 3">
+          <svg viewBox="0 0 550 750" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+            <rect width="550" height="750" fill="#111111"/>
+            <rect x="60"  y="80"  width="180" height="240" fill="none" stroke="#444" stroke-width="1"/>
+            <rect x="80"  y="100" width="140" height="200" fill="#1e1e1e"/>
+            <rect x="90"  y="110" width="60"  height="80"  fill="#2a2a2a"/>
+            <rect x="160" y="110" width="50"  height="80"  fill="#2a2a2a"/>
+            <rect x="90"  y="200" width="60"  height="80"  fill="#252525"/>
+            <rect x="160" y="200" width="50"  height="80"  fill="#252525"/>
+            <rect x="290" y="140" width="200" height="280" fill="none" stroke="#444" stroke-width="1"/>
+            <rect x="310" y="160" width="160" height="240" fill="#1a1a1a"/>
+            <rect x="320" y="170" width="65"  height="100" fill="#2e2e2e"/>
+            <rect x="395" y="170" width="65"  height="100" fill="#2e2e2e"/>
+            <rect x="320" y="280" width="65"  height="100" fill="#262626"/>
+            <rect x="395" y="280" width="65"  height="100" fill="#262626"/>
+            <rect x="150" y="450" width="250" height="180" fill="none" stroke="#555" stroke-width="1"/>
+            <rect x="170" y="470" width="210" height="140" fill="#1c1c1c"/>
+            <rect x="185" y="485" width="80"  height="105" fill="#282828"/>
+            <rect x="275" y="485" width="90"  height="50"  fill="#242424"/>
+            <rect x="275" y="545" width="90"  height="50"  fill="#242424"/>
+            <line x1="0" y1="660" x2="550" y2="660" stroke="#333" stroke-width="1"/>
+            <defs>
+              <linearGradient id="g3" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="60%" stop-color="#111" stop-opacity="0"/>
+                <stop offset="100%" stop-color="#111" stop-opacity=".9"/>
+              </linearGradient>
+            </defs>
+            <rect width="550" height="750" fill="url(#g3)"/>
+            <text x="30" y="730" font-family="system-ui" font-size="13" fill="#ffffff" opacity=".4" letter-spacing="3">03 / ARCHITECTURE</text>
+          </svg>
+        </div>
+        <div class="photo-card" tabindex="0" role="button" aria-label="Фото 4">
+          <svg viewBox="0 0 450 600" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+            <rect width="450" height="600" fill="#0d0d0d"/>
+            <line x1="225" y1="0"   x2="0"   y2="600" stroke="#333" stroke-width="1"/>
+            <line x1="225" y1="0"   x2="50"  y2="600" stroke="#3a3a3a" stroke-width="1"/>
+            <line x1="225" y1="0"   x2="110" y2="600" stroke="#444" stroke-width="1"/>
+            <line x1="225" y1="0"   x2="170" y2="600" stroke="#555" stroke-width="1.5"/>
+            <line x1="225" y1="0"   x2="225" y2="600" stroke="#666" stroke-width="2"/>
+            <line x1="225" y1="0"   x2="280" y2="600" stroke="#555" stroke-width="1.5"/>
+            <line x1="225" y1="0"   x2="340" y2="600" stroke="#444" stroke-width="1"/>
+            <line x1="225" y1="0"   x2="400" y2="600" stroke="#3a3a3a" stroke-width="1"/>
+            <line x1="225" y1="0"   x2="450" y2="600" stroke="#333" stroke-width="1"/>
+            <circle cx="225" cy="0" r="6" fill="#aaa"/>
+            <circle cx="225" cy="0" r="18" fill="none" stroke="#666" stroke-width="1" opacity=".5"/>
+            <rect x="160" y="260" width="130" height="1" fill="#555"/>
+            <rect x="175" y="280" width="100" height="1" fill="#444"/>
+            <rect x="190" y="300" width="70"  height="1" fill="#333"/>
+            <defs>
+              <radialGradient id="g4" cx="50%" cy="0%" r="80%">
+                <stop offset="0%" stop-color="#2a2a2a" stop-opacity=".4"/>
+                <stop offset="100%" stop-color="#0d0d0d" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <rect width="450" height="600" fill="url(#g4)"/>
+            <text x="30" y="578" font-family="system-ui" font-size="13" fill="#ffffff" opacity=".4" letter-spacing="3">04 / MOTION</text>
+          </svg>
+        </div>
+      </div>
+      <div class="comp-caption" id="compCaption">
+        <p class="caption-left">Наведите на любую фотографию — она выходит вперёд, остальное уходит в тень</p>
+        <span class="caption-right">2026 / Composition</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="spacer below">Дальше по странице ↓</div>
+
+<script>
+(function() {
+  var cluster = document.getElementById('photosCluster');
+  var heading = document.getElementById('compHeading');
+  var caption = document.getElementById('compCaption');
+  if (!cluster) return;
+  var cards = cluster.querySelectorAll('.photo-card');
+  function on(card) {
+    cluster.classList.add('cluster-hovered');
+    card.classList.add('card-active');
+    if (heading) heading.classList.add('dimmed');
+    if (caption) caption.classList.add('dimmed');
+  }
+  function off(card) {
+    cluster.classList.remove('cluster-hovered');
+    card.classList.remove('card-active');
+    if (heading) heading.classList.remove('dimmed');
+    if (caption) caption.classList.remove('dimmed');
+  }
+  cards.forEach(function(card) {
+    card.addEventListener('mouseenter', function() { on(card); });
+    card.addEventListener('mouseleave', function() { off(card); });
+    card.addEventListener('focus',      function() { on(card); });
+    card.addEventListener('blur',       function() { off(card); });
+  });
+})();
+</script>
+
+</body>
+</html>
